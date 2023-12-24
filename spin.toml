@@ -1,0 +1,19 @@
+spin_manifest_version = 2
+
+[application]
+name = "advent-of-spin-challenge-four"
+version = "0.1.0"
+authors = ["James Hagans <jhagans@acm.org>"]
+description = "advent of spin week 4"
+
+[[trigger.http]]
+route = "/api"
+component = "api"
+
+[component.api]
+source = "api/target/wasm32-wasi/release/api.wasm"
+allowed_outbound_hosts = ["https://bulls-n-cows.fermyon.app:443"]
+[component.api.build]
+command = "cargo build --target wasm32-wasi --release"
+workdir = "api"
+watch = ["src/**/*.rs", "Cargo.toml"]
