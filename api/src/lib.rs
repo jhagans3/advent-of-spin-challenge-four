@@ -29,7 +29,6 @@ struct State {
     pos_two: i32,
     pos_three: i32,
     code: StateCode,
-    // guess: Guess,
 }
 
 /// A simple Spin HTTP component.
@@ -61,9 +60,8 @@ async fn handle_api(_req: Request) -> anyhow::Result<impl IntoResponse> {
     println!("First State: {first_state:?}");
 
     let last_state = helper(first_guess, first_state).await;
-    // let last_guess = last_state.guess;
     println!("Last State: {last_state:?}");
-    // let res = serde_json::to_string(&last_guess);
+    // let res = format!("{last_state.pos_one}{last_state.pos_two}{last_state.pos_three}");
 
     Ok(http::Response::builder()
         .status(StatusCode::OK)
@@ -89,7 +87,7 @@ async fn call(game_id: String, state: State) -> Guess {
     // let s = std::str::from_utf8(body).unwrap();
     // println!("CALL RESP BODY STR {s:?}");
 
-    let guess: Guess = serde_json::from_slice(body).unwrap();
+    let mut guess: Guess = serde_json::from_slice(body).unwrap();
     println!("CALL Guess TYPE: {guess:?}");
 
     if guess.wrong_position == 0 && guess.right_position == 3 && guess.solved {
@@ -97,6 +95,14 @@ async fn call(game_id: String, state: State) -> Guess {
     }
 
     guess
+}
+
+fn fond_answer(guess: &Guess) -> bool {
+    if guess.wrong_position == 0 && guess.right_position == 3 && guess.solved {
+        true
+    } else {
+        false
+    }
 }
 
 async fn inc(guess: Guess, state: State) -> (Guess, State) {
@@ -118,6 +124,16 @@ async fn inc(guess: Guess, state: State) -> (Guess, State) {
         code,
     };
     let new_guess_one = call(game_id.clone(), new_state_one).await;
+    if fond_answer(&new_guess_one) {
+        let new_state_res = State {
+            pos_one: pos_two,
+            pos_two: pos_one,
+            pos_three: pos_three,
+            code: StateCode::STOP,
+        };
+        println!("!!! INCSOLUTION = {new_guess_one:?} {new_state_res:?}!!!");
+        return (new_guess_one, new_state_res);
+    }
 
     let new_state_two = State {
         pos_one,
@@ -126,6 +142,16 @@ async fn inc(guess: Guess, state: State) -> (Guess, State) {
         code,
     };
     let new_guess_two = call(game_id.clone(), new_state_two).await;
+    if fond_answer(&new_guess_two) {
+        let new_state_res = State {
+            pos_one: pos_two,
+            pos_two: pos_one,
+            pos_three: pos_three,
+            code: StateCode::STOP,
+        };
+        println!("!!! INCSOLUTION = {new_guess_two:?} {new_state_res:?}!!!");
+        return (new_guess_two, new_state_res);
+    }
 
     let new_state_three = State {
         pos_one,
@@ -134,6 +160,16 @@ async fn inc(guess: Guess, state: State) -> (Guess, State) {
         code,
     };
     let new_guess_three = call(game_id.clone(), new_state_three).await;
+    if fond_answer(&new_guess_three) {
+        let new_state_res = State {
+            pos_one: pos_two,
+            pos_two: pos_one,
+            pos_three: pos_three,
+            code: StateCode::STOP,
+        };
+        println!("!!! INCSOLUTION = {new_guess_three:?} {new_state_res:?}!!!");
+        return (new_guess_three, new_state_res);
+    }
 
     let tuples = vec![
         (new_guess_one, new_state_one),
@@ -174,6 +210,16 @@ async fn swap(guess: Guess, state: State) -> (Guess, State) {
         code,
     };
     let new_guess_one = call(game_id.clone(), new_state_one).await;
+    if fond_answer(&new_guess_one) {
+        let new_state_res = State {
+            pos_one: pos_two,
+            pos_two: pos_one,
+            pos_three: pos_three,
+            code: StateCode::STOP,
+        };
+        println!("!!! SWAPSOLUTION = {new_guess_one:?} {new_state_res:?}!!!");
+        return (new_guess_one, new_state_res);
+    }
 
     let new_state_two = State {
         pos_one: pos_two,
@@ -182,6 +228,16 @@ async fn swap(guess: Guess, state: State) -> (Guess, State) {
         code,
     };
     let new_guess_two = call(game_id.clone(), new_state_two).await;
+    if fond_answer(&new_guess_two) {
+        let new_state_res = State {
+            pos_one: pos_two,
+            pos_two: pos_one,
+            pos_three: pos_three,
+            code: StateCode::STOP,
+        };
+        println!("!!! SWAPSOLUTION = {new_guess_two:?} {new_state_res:?}!!!");
+        return (new_guess_two, new_state_res);
+    }
 
     let new_state_three = State {
         pos_one: pos_three,
@@ -190,6 +246,16 @@ async fn swap(guess: Guess, state: State) -> (Guess, State) {
         code,
     };
     let new_guess_three = call(game_id.clone(), new_state_three).await;
+    if fond_answer(&new_guess_three) {
+        let new_state_res = State {
+            pos_one: pos_two,
+            pos_two: pos_one,
+            pos_three: pos_three,
+            code: StateCode::STOP,
+        };
+        println!("!!! SWAPSOLUTION = {new_guess_three:?} {new_state_res:?}!!!");
+        return (new_guess_three, new_state_res);
+    }
 
     let tuples = vec![
         (new_guess_one, new_state_one),
@@ -231,6 +297,7 @@ async fn helper(guess: Guess, state: State) -> State {
     }
 
     if code == StateCode::STOP {
+        println!("STOP IF");
         return state;
     }
     if code == StateCode::ERROR {
@@ -293,12 +360,15 @@ async fn helper(guess: Guess, state: State) -> State {
             game_id,
             guesses,
             solved,
-        } => State {
-            pos_one,
-            pos_two,
-            pos_three,
-            code: StateCode::STOP,
-        },
+        } => {
+            println!("03 {state:?} {guess:?}");
+            State {
+                pos_one,
+                pos_two,
+                pos_three,
+                code: StateCode::STOP,
+            }
+        }
 
         Guess {
             wrong_position: 1,
@@ -307,7 +377,7 @@ async fn helper(guess: Guess, state: State) -> State {
             guesses,
             solved,
         } => {
-            let (new_guess, new_state) = swap(guess, state).await;
+            let (new_guess, new_state) = inc(guess, state).await;
             helper(new_guess, new_state).await
         }
 
