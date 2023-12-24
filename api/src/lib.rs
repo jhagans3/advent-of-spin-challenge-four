@@ -43,13 +43,13 @@ async fn handle_api(_req: Request) -> anyhow::Result<impl IntoResponse> {
         .into_builder()
         .header("spin-component", "rust-outbound-http")
         .build();
-    println!("RESP {resp:?}");
+    // println!("RESP {resp:?}");
     let body = resp.body();
     let s = std::str::from_utf8(body).unwrap();
-    println!("RESP BODY STR {s:?}");
+    // println!("RESP BODY STR {s:?}");
 
     let first_guess: Guess = serde_json::from_slice(body).unwrap();
-    println!("First Guess :{first_guess:?}");
+    println!("First Guess: {first_guess:?}");
 
     let first_state = State {
         pos_one: 0,
@@ -58,10 +58,11 @@ async fn handle_api(_req: Request) -> anyhow::Result<impl IntoResponse> {
         code: StateCode::RUN,
         // guess: first_guess.clone(),
     };
+    println!("First State: {first_state:?}");
 
     let last_state = helper(first_guess, first_state).await;
     // let last_guess = last_state.guess;
-    println!("Last State:{last_state:?}");
+    println!("Last State: {last_state:?}");
     // let res = serde_json::to_string(&last_guess);
 
     Ok(http::Response::builder()
@@ -74,8 +75,10 @@ async fn call(game_id: String, state: State) -> Guess {
     let one = state.pos_one;
     let two = state.pos_two;
     let three = state.pos_three;
-    let guess = format!("{one}{two}{three}");
-    let uri: String = format!("https://bulls-n-cows.fermyon.app/api?guess={guess}&id={game_id}");
+    let guess_string = format!("{one}{two}{three}");
+    println!("CALL GUESS #: {guess_string:?}");
+    let uri: String =
+        format!("https://bulls-n-cows.fermyon.app/api?guess={guess_string}&id={game_id}");
     let resp: Response = spin_sdk::http::send(Request::get(uri)).await.unwrap();
 
     let resp = resp
@@ -83,11 +86,15 @@ async fn call(game_id: String, state: State) -> Guess {
         .header("spin-component", "rust-outbound-http")
         .build();
     let body = resp.body();
-    let s = std::str::from_utf8(body).unwrap();
-    println!("CALL RESP BODY STR {s:?}");
+    // let s = std::str::from_utf8(body).unwrap();
+    // println!("CALL RESP BODY STR {s:?}");
 
-    let guess: Guess = serde_json::from_slice(resp.body()).unwrap();
-    println!("Middle Guess: {guess:?}");
+    let guess: Guess = serde_json::from_slice(body).unwrap();
+    println!("CALL Guess TYPE: {guess:?}");
+
+    if guess.wrong_position == 0 && guess.right_position == 3 && guess.solved {
+        println!("!!! SOLUTION = {guess_string:?}!!!")
+    }
 
     guess
 }
@@ -99,6 +106,7 @@ async fn inc(guess: Guess, state: State) -> (Guess, State) {
         pos_three,
         code,
     } = state;
+    println!("INC {state:?}");
     let game_id = guess.game_id.clone();
 
     let inc_max = vec![pos_one, pos_two, pos_three].iter().max().unwrap() + 1;
@@ -156,6 +164,7 @@ async fn swap(guess: Guess, state: State) -> (Guess, State) {
         pos_three,
         code,
     } = state;
+    println!("SWAP {state:?}");
     let game_id = guess.game_id.clone();
 
     let new_state_one = State {
@@ -320,7 +329,7 @@ async fn helper(guess: Guess, state: State) -> State {
             guesses,
             solved,
         } => {
-            let (new_guess, new_state) = swap(guess, state).await;
+            let (new_guess, new_state) = inc(guess, state).await;
             helper(new_guess, new_state).await
         }
 
