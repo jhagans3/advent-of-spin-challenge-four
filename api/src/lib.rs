@@ -23,7 +23,7 @@ enum StateCode {
     ERROR,
 }
 
-#[derive(Clone, Copy, Serialize, Debug)]
+#[derive(Clone, Serialize, Debug)]
 struct State {
     pos_one: i32,
     pos_two: i32,
@@ -31,8 +31,8 @@ struct State {
     #[serde(skip_serializing)]
     code: StateCode,
     ans: i32,
-    // game_id: String,
     guesses: i32,
+    game_id: String,
 }
 
 /// A simple Spin HTTP component.
@@ -61,17 +61,15 @@ async fn handle_api(_req: Request) -> anyhow::Result<impl IntoResponse> {
         code: StateCode::RUN,
         ans: 000,
         guesses: 1,
+        game_id: first_guess.game_id.clone(),
     };
     println!("First State: {first_state:?}");
 
-    let last_state = helper(first_guess, first_state).await;
+    let last_state = helper(first_guess.clone(), first_state).await;
     println!("Last State: {last_state:?}");
     let res = serde_json::to_string(&last_state).unwrap();
 
-    Ok(http::Response::builder()
-        .status(StatusCode::OK)
-        // .body(s.to_string())?)
-        .body(res)?)
+    Ok(http::Response::builder().status(StatusCode::OK).body(res)?)
 }
 
 async fn call(game_id: String, state: State) -> Guess {
@@ -93,7 +91,7 @@ async fn call(game_id: String, state: State) -> Guess {
     // let s = std::str::from_utf8(body).unwrap();
     // println!("CALL RESP BODY STR {s:?}");
 
-    let mut guess: Guess = serde_json::from_slice(body).unwrap();
+    let guess: Guess = serde_json::from_slice(body).unwrap();
     println!("CALL Guess TYPE: {guess:?}");
 
     if guess.wrong_position == 0 && guess.right_position == 3 && guess.solved {
@@ -111,7 +109,7 @@ fn fond_answer(guess: &Guess) -> bool {
     }
 }
 
-fn new_state_res(state: State, number_of_guess: i32) -> State {
+fn new_state_res(state: State, number_of_guess: i32, game_id: String) -> State {
     let one = state.pos_one;
     let two = state.pos_two;
     let three = state.pos_three;
@@ -125,6 +123,7 @@ fn new_state_res(state: State, number_of_guess: i32) -> State {
         code: StateCode::STOP,
         ans: ans,
         guesses: number_of_guess,
+        game_id,
     }
 }
 
@@ -136,7 +135,8 @@ async fn inc(guess: Guess, state: State) -> (Guess, State) {
         code,
         ans,
         guesses,
-    } = state;
+        game_id: _,
+    } = state.clone();
     println!("INC {state:?}");
     let game_id = guess.game_id.clone();
 
@@ -149,12 +149,17 @@ async fn inc(guess: Guess, state: State) -> (Guess, State) {
         code,
         ans,
         guesses,
+        game_id: game_id.to_string(),
     };
-    let new_guess_one = call(game_id.clone(), new_state_one).await;
+    let new_guess_one = call(game_id.to_string(), new_state_one.clone()).await;
     if fond_answer(&new_guess_one) {
-        let new_state_res = new_state_res(new_state_one, new_guess_one.guesses);
+        let new_state_res = new_state_res(
+            new_state_one,
+            new_guess_one.guesses,
+            new_guess_one.game_id.clone(),
+        );
         println!("!!! INCSOLUTION = {new_guess_one:?} {new_state_res:?}!!!");
-        return (new_guess_one, new_state_res);
+        return (new_guess_one, new_state_res.clone());
     }
 
     let new_state_two = State {
@@ -164,12 +169,17 @@ async fn inc(guess: Guess, state: State) -> (Guess, State) {
         code,
         ans,
         guesses,
+        game_id: game_id.to_string(),
     };
-    let new_guess_two = call(game_id.clone(), new_state_two).await;
+    let new_guess_two = call(game_id.to_string(), new_state_two.clone()).await;
     if fond_answer(&new_guess_two) {
-        let new_state_res = new_state_res(new_state_two, new_guess_two.guesses);
+        let new_state_res = new_state_res(
+            new_state_two,
+            new_guess_two.guesses,
+            new_guess_two.game_id.clone(),
+        );
         println!("!!! INCSOLUTION = {new_guess_two:?} {new_state_res:?}!!!");
-        return (new_guess_two, new_state_res);
+        return (new_guess_two, new_state_res.clone());
     }
 
     let new_state_three = State {
@@ -179,12 +189,17 @@ async fn inc(guess: Guess, state: State) -> (Guess, State) {
         code,
         ans,
         guesses,
+        game_id: game_id.to_string(),
     };
-    let new_guess_three = call(game_id.clone(), new_state_three).await;
+    let new_guess_three = call(game_id.to_string(), new_state_three.clone()).await;
     if fond_answer(&new_guess_three) {
-        let new_state_res = new_state_res(new_state_three, new_guess_three.guesses);
+        let new_state_res = new_state_res(
+            new_state_three,
+            new_guess_three.guesses,
+            new_guess_three.game_id.clone(),
+        );
         println!("!!! INCSOLUTION = {new_guess_three:?} {new_state_res:?}!!!");
-        return (new_guess_three, new_state_res);
+        return (new_guess_three, new_state_res.clone());
     }
 
     let tuples = vec![
@@ -217,6 +232,7 @@ async fn swap(guess: Guess, state: State) -> (Guess, State) {
         code,
         ans,
         guesses,
+        game_id: _,
     } = state;
     println!("SWAP {state:?}");
     let game_id = guess.game_id.clone();
@@ -228,12 +244,17 @@ async fn swap(guess: Guess, state: State) -> (Guess, State) {
         code,
         ans,
         guesses,
+        game_id: game_id.to_string(),
     };
-    let new_guess_one = call(game_id.clone(), new_state_one).await;
+    let new_guess_one = call(game_id.to_string(), new_state_one.clone()).await;
     if fond_answer(&new_guess_one) {
-        let new_state_res = new_state_res(new_state_one, new_guess_one.guesses);
+        let new_state_res = new_state_res(
+            new_state_one,
+            new_guess_one.guesses,
+            new_guess_one.game_id.clone(),
+        );
         println!("!!! SWAPSOLUTION = {new_guess_one:?} {new_state_res:?}!!!");
-        return (new_guess_one, new_state_res);
+        return (new_guess_one, new_state_res.clone());
     }
 
     let new_state_two = State {
@@ -243,12 +264,17 @@ async fn swap(guess: Guess, state: State) -> (Guess, State) {
         code,
         ans,
         guesses,
+        game_id: game_id.to_string(),
     };
-    let new_guess_two = call(game_id.clone(), new_state_two).await;
+    let new_guess_two = call(game_id.to_string(), new_state_two.clone()).await;
     if fond_answer(&new_guess_two) {
-        let new_state_res = new_state_res(new_state_two, new_guess_two.guesses);
+        let new_state_res = new_state_res(
+            new_state_two,
+            new_guess_two.guesses,
+            new_guess_two.game_id.clone(),
+        );
         println!("!!! SWAPSOLUTION = {new_guess_two:?} {new_state_res:?}!!!");
-        return (new_guess_two, new_state_res);
+        return (new_guess_two, new_state_res.clone());
     }
 
     let new_state_three = State {
@@ -258,12 +284,17 @@ async fn swap(guess: Guess, state: State) -> (Guess, State) {
         code,
         ans,
         guesses,
+        game_id: game_id.to_string(),
     };
-    let new_guess_three = call(game_id.clone(), new_state_three).await;
+    let new_guess_three = call(game_id.to_string(), new_state_three.clone()).await;
     if fond_answer(&new_guess_three) {
-        let new_state_res = new_state_res(new_state_three, new_guess_three.guesses);
+        let new_state_res = new_state_res(
+            new_state_three,
+            new_guess_three.guesses,
+            new_guess_three.game_id.clone(),
+        );
         println!("!!! SWAPSOLUTION = {new_guess_three:?} {new_state_res:?}!!!");
-        return (new_guess_three, new_state_res);
+        return (new_guess_three, new_state_res.clone());
     }
 
     let tuples = vec![
@@ -297,7 +328,8 @@ async fn helper(guess: Guess, state: State) -> State {
         code,
         ans,
         guesses,
-    } = state;
+        game_id,
+    } = state.clone();
     if pos_one > 4 || pos_two > 4 || pos_three > 4 {
         return State {
             pos_one,
@@ -306,6 +338,7 @@ async fn helper(guess: Guess, state: State) -> State {
             code: StateCode::ERROR,
             ans,
             guesses,
+            game_id,
         };
     }
 
@@ -319,9 +352,9 @@ async fn helper(guess: Guess, state: State) -> State {
 
     match guess.clone() {
         Guess {
-            wrong_position,
-            right_position,
-            game_id,
+            wrong_position: _,
+            right_position: _,
+            game_id: _,
             guesses,
             solved,
         } if solved => State {
@@ -331,13 +364,14 @@ async fn helper(guess: Guess, state: State) -> State {
             code: StateCode::STOP,
             ans,
             guesses,
+            game_id,
         },
         Guess {
             wrong_position: 0,
             right_position: 0,
             game_id,
             guesses,
-            solved,
+            solved: _,
         } => {
             let new_state = State {
                 pos_one: pos_one + 1,
@@ -346,16 +380,17 @@ async fn helper(guess: Guess, state: State) -> State {
                 code,
                 ans,
                 guesses,
+                game_id: game_id.clone(),
             };
-            let new_guess = call(game_id.clone(), new_state).await;
+            let new_guess = call(game_id.clone(), new_state.clone()).await;
             helper(new_guess, new_state).await
         }
         Guess {
             wrong_position: 0,
             right_position: 1,
-            game_id,
-            guesses,
-            solved,
+            game_id: _,
+            guesses: _,
+            solved: _,
         } => {
             let (new_guess, new_state) = inc(guess, state).await;
             helper(new_guess, new_state).await
@@ -363,9 +398,9 @@ async fn helper(guess: Guess, state: State) -> State {
         Guess {
             wrong_position: 0,
             right_position: 2,
-            game_id,
-            guesses,
-            solved,
+            game_id: _,
+            guesses: _,
+            solved: _,
         } => {
             let (new_guess, new_state) = inc(guess, state).await;
             helper(new_guess, new_state).await
@@ -374,9 +409,9 @@ async fn helper(guess: Guess, state: State) -> State {
         Guess {
             wrong_position: 0,
             right_position: 3,
-            game_id,
+            game_id: _,
             guesses,
-            solved,
+            solved: _,
         } => {
             println!("03 {state:?} {guess:?}");
             State {
@@ -386,15 +421,16 @@ async fn helper(guess: Guess, state: State) -> State {
                 code: StateCode::STOP,
                 ans,
                 guesses,
+                game_id,
             }
         }
 
         Guess {
             wrong_position: 1,
             right_position: 0,
-            game_id,
-            guesses,
-            solved,
+            game_id: _,
+            guesses: _,
+            solved: _,
         } => {
             let (new_guess, new_state) = inc(guess, state).await;
             helper(new_guess, new_state).await
@@ -403,9 +439,9 @@ async fn helper(guess: Guess, state: State) -> State {
         Guess {
             wrong_position: 1,
             right_position: 1,
-            game_id,
-            guesses,
-            solved,
+            game_id: _,
+            guesses: _,
+            solved: _,
         } => {
             let (new_guess, new_state) = inc(guess, state).await;
             helper(new_guess, new_state).await
@@ -414,9 +450,9 @@ async fn helper(guess: Guess, state: State) -> State {
         Guess {
             wrong_position: 2,
             right_position: 0,
-            game_id,
-            guesses,
-            solved,
+            game_id: _,
+            guesses: _,
+            solved: _,
         } => {
             let (new_guess, new_state) = inc(guess, state).await;
             helper(new_guess, new_state).await
@@ -425,9 +461,9 @@ async fn helper(guess: Guess, state: State) -> State {
         Guess {
             wrong_position: 2,
             right_position: 1,
-            game_id,
-            guesses,
-            solved,
+            game_id: _,
+            guesses: _,
+            solved: _,
         } => {
             let (new_guess, new_state) = swap(guess, state).await;
             helper(new_guess, new_state).await
@@ -436,9 +472,9 @@ async fn helper(guess: Guess, state: State) -> State {
         Guess {
             wrong_position: 3,
             right_position: 0,
-            game_id,
-            guesses,
-            solved,
+            game_id: _,
+            guesses: _,
+            solved: _,
         } => {
             let (new_guess, new_state) = swap(guess, state).await;
             helper(new_guess, new_state).await
@@ -451,6 +487,7 @@ async fn helper(guess: Guess, state: State) -> State {
             code: StateCode::ERROR,
             ans,
             guesses,
+            game_id,
         },
     }
 }
