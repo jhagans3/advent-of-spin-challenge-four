@@ -17,3 +17,15 @@ allowed_outbound_hosts = ["https://bulls-n-cows.fermyon.app:443"]
 command = "cargo build --target wasm32-wasi --release"
 workdir = "api"
 watch = ["src/**/*.rs", "Cargo.toml"]
+
+[[trigger.http]]
+route = "/..."
+component = "index"
+
+[component.index]
+source = "index/target/wasm32-wasi/release/index.wasm"
+allowed_outbound_hosts = []
+[component.index.build]
+command = "cargo build --target wasm32-wasi --release"
+workdir = "index"
+watch = ["src/**/*.rs", "Cargo.toml"]
