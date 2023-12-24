@@ -7,7 +7,7 @@ authors = ["James Hagans <jhagans@acm.org>"]
 description = "advent of spin week 4"
 
 [[trigger.http]]
-route = "/api"
+route = "/..."
 component = "api"
 
 [component.api]
@@ -16,16 +16,4 @@ allowed_outbound_hosts = ["https://bulls-n-cows.fermyon.app:443"]
 [component.api.build]
 command = "cargo build --target wasm32-wasi --release"
 workdir = "api"
-watch = ["src/**/*.rs", "Cargo.toml"]
-
-[[trigger.http]]
-route = "/..."
-component = "index"
-
-[component.index]
-source = "index/target/wasm32-wasi/release/index.wasm"
-allowed_outbound_hosts = []
-[component.index.build]
-command = "cargo build --target wasm32-wasi --release"
-workdir = "index"
 watch = ["src/**/*.rs", "Cargo.toml"]
