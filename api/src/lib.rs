@@ -101,7 +101,7 @@ async fn call(game_id: String, state: State) -> Guess {
     guess
 }
 
-fn fond_answer(guess: &Guess) -> bool {
+fn found_answer(guess: &Guess) -> bool {
     if guess.wrong_position == 0 && guess.right_position == 3 && guess.solved {
         true
     } else {
@@ -152,7 +152,7 @@ async fn inc(guess: Guess, state: State) -> (Guess, State) {
         game_id: game_id.to_string(),
     };
     let new_guess_one = call(game_id.to_string(), new_state_one.clone()).await;
-    if fond_answer(&new_guess_one) {
+    if found_answer(&new_guess_one) {
         let new_state_res = new_state_res(
             new_state_one,
             new_guess_one.guesses,
@@ -172,7 +172,7 @@ async fn inc(guess: Guess, state: State) -> (Guess, State) {
         game_id: game_id.to_string(),
     };
     let new_guess_two = call(game_id.to_string(), new_state_two.clone()).await;
-    if fond_answer(&new_guess_two) {
+    if found_answer(&new_guess_two) {
         let new_state_res = new_state_res(
             new_state_two,
             new_guess_two.guesses,
@@ -192,7 +192,7 @@ async fn inc(guess: Guess, state: State) -> (Guess, State) {
         game_id: game_id.to_string(),
     };
     let new_guess_three = call(game_id.to_string(), new_state_three.clone()).await;
-    if fond_answer(&new_guess_three) {
+    if found_answer(&new_guess_three) {
         let new_state_res = new_state_res(
             new_state_three,
             new_guess_three.guesses,
@@ -247,7 +247,7 @@ async fn swap(guess: Guess, state: State) -> (Guess, State) {
         game_id: game_id.to_string(),
     };
     let new_guess_one = call(game_id.to_string(), new_state_one.clone()).await;
-    if fond_answer(&new_guess_one) {
+    if found_answer(&new_guess_one) {
         let new_state_res = new_state_res(
             new_state_one,
             new_guess_one.guesses,
@@ -267,7 +267,7 @@ async fn swap(guess: Guess, state: State) -> (Guess, State) {
         game_id: game_id.to_string(),
     };
     let new_guess_two = call(game_id.to_string(), new_state_two.clone()).await;
-    if fond_answer(&new_guess_two) {
+    if found_answer(&new_guess_two) {
         let new_state_res = new_state_res(
             new_state_two,
             new_guess_two.guesses,
@@ -287,7 +287,7 @@ async fn swap(guess: Guess, state: State) -> (Guess, State) {
         game_id: game_id.to_string(),
     };
     let new_guess_three = call(game_id.to_string(), new_state_three.clone()).await;
-    if fond_answer(&new_guess_three) {
+    if found_answer(&new_guess_three) {
         let new_state_res = new_state_res(
             new_state_three,
             new_guess_three.guesses,
