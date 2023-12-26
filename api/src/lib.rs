@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use async_recursion::async_recursion;
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -25,14 +27,19 @@ enum StateCode {
 
 #[derive(Clone, Serialize, Debug)]
 struct State {
+    #[serde(skip_serializing)]
     pos_one: i32,
+    #[serde(skip_serializing)]
     pos_two: i32,
+    #[serde(skip_serializing)]
     pos_three: i32,
     #[serde(skip_serializing)]
     code: StateCode,
     ans: i32,
+    #[serde(rename(serialize = "total_backtrack_guesses"))]
     guesses: i32,
     game_id: String,
+    history: HashMap<i32, String>,
 }
 
 /// A simple Spin HTTP component.
@@ -52,7 +59,13 @@ async fn handle_api(_req: Request) -> anyhow::Result<impl IntoResponse> {
     // println!("RESP BODY STR {s:?}");
 
     let first_guess: Guess = serde_json::from_slice(body).unwrap();
+    let w = first_guess.wrong_position;
+    let r = first_guess.right_position;
+    let first_guess_history = format!("012({w},{r})[1st]");
     println!("First Guess: {first_guess:?}");
+    let mut history = HashMap::new();
+    history.insert(0, "guess(cow,bull)[op]".to_string());
+    history.insert(1, first_guess_history);
 
     let first_state = State {
         pos_one: 0,
@@ -62,6 +75,7 @@ async fn handle_api(_req: Request) -> anyhow::Result<impl IntoResponse> {
         ans: 000,
         guesses: 1,
         game_id: first_guess.game_id.clone(),
+        history,
     };
     println!("First State: {first_state:?}");
 
@@ -72,13 +86,15 @@ async fn handle_api(_req: Request) -> anyhow::Result<impl IntoResponse> {
     Ok(http::Response::builder().status(StatusCode::OK).body(res)?)
 }
 
-async fn call(game_id: String, state: State) -> Guess {
+async fn call(state: State) -> Guess {
     println!("CALL {state:?}");
+    let game_id = state.game_id;
     let one = state.pos_one;
     let two = state.pos_two;
     let three = state.pos_three;
     let guess_string = format!("{one}{two}{three}");
     println!("CALL GUESS #: {guess_string:?}");
+
     let uri: String =
         format!("https://bulls-n-cows.fermyon.app/api?guess={guess_string}&id={game_id}");
     let resp: Response = spin_sdk::http::send(Request::get(uri)).await.unwrap();
@@ -109,12 +125,18 @@ fn found_answer(guess: &Guess) -> bool {
     }
 }
 
-fn new_state_res(state: State, number_of_guess: i32, game_id: String) -> State {
+fn new_state_res(state: State, op: String) -> State {
+    let game_id = state.game_id.clone();
+    let number_of_guess = state.guesses.clone();
     let one = state.pos_one;
     let two = state.pos_two;
     let three = state.pos_three;
-
+    let guess_string = format!("{one}{two}{three}(0,3)[{op}]");
     let ans = (100 * one) + (10 * two) + (three);
+
+    let mut history = state.history.clone();
+    let key = history.len() as i32;
+    history.insert(key, guess_string);
 
     State {
         pos_one: one,
@@ -124,8 +146,11 @@ fn new_state_res(state: State, number_of_guess: i32, game_id: String) -> State {
         ans: ans,
         guesses: number_of_guess,
         game_id,
+        history,
     }
 }
+
+// fn update_history(state: &State) -> State {}
 
 async fn inc(guess: Guess, state: State) -> (Guess, State) {
     let State {
@@ -135,71 +160,87 @@ async fn inc(guess: Guess, state: State) -> (Guess, State) {
         code,
         ans,
         guesses,
-        game_id: _,
+        game_id,
+        history,
     } = state.clone();
     println!("INC {state:?}");
-    let game_id = guess.game_id.clone();
-
+    let operation = "+".to_string();
     let inc_max = vec![pos_one, pos_two, pos_three].iter().max().unwrap() + 1;
+    let key = history.len() as i32;
 
-    let new_state_one = State {
+    let mut new_state_one = State {
         pos_one: inc_max,
         pos_two,
         pos_three,
         code,
         ans,
         guesses,
-        game_id: game_id.to_string(),
+        game_id: game_id.clone(),
+        history: state.history.clone(),
     };
-    let new_guess_one = call(game_id.to_string(), new_state_one.clone()).await;
+
+    let new_guess_one = call(new_state_one.clone()).await;
     if found_answer(&new_guess_one) {
-        let new_state_res = new_state_res(
-            new_state_one,
-            new_guess_one.guesses,
-            new_guess_one.game_id.clone(),
-        );
+        let new_state_res = new_state_res(new_state_one, operation);
         println!("!!! INCSOLUTION = {new_guess_one:?} {new_state_res:?}!!!");
         return (new_guess_one, new_state_res.clone());
+    } else {
+        let w = new_guess_one.wrong_position.clone();
+        let r = new_guess_one.right_position.clone();
+        let mut history_one = new_state_one.history.clone();
+        let guess_string = format!("{inc_max}{pos_two}{pos_three}({w},{r})[inc]");
+        history_one.insert(key, guess_string);
+        new_state_one.history = history_one;
     }
 
-    let new_state_two = State {
+    let mut new_state_two = State {
         pos_one,
         pos_two: inc_max,
         pos_three,
         code,
         ans,
         guesses,
-        game_id: game_id.to_string(),
+        game_id: game_id.clone(),
+        history: state.history.clone(),
     };
-    let new_guess_two = call(game_id.to_string(), new_state_two.clone()).await;
+
+    let new_guess_two = call(new_state_two.clone()).await;
     if found_answer(&new_guess_two) {
-        let new_state_res = new_state_res(
-            new_state_two,
-            new_guess_two.guesses,
-            new_guess_two.game_id.clone(),
-        );
+        let new_state_res = new_state_res(new_state_two, operation);
         println!("!!! INCSOLUTION = {new_guess_two:?} {new_state_res:?}!!!");
         return (new_guess_two, new_state_res.clone());
+    } else {
+        let w = new_guess_two.wrong_position.clone();
+        let r = new_guess_two.right_position.clone();
+        let mut history_two = new_state_two.history.clone();
+        let guess_string = format!("{pos_one}{inc_max}{pos_three}({w},{r})[inc]");
+        history_two.insert(key, guess_string);
+        new_state_two.history = history_two;
     }
 
-    let new_state_three = State {
+    let mut new_state_three = State {
         pos_one,
         pos_two,
         pos_three: inc_max,
         code,
         ans,
         guesses,
-        game_id: game_id.to_string(),
+        game_id: game_id.clone(),
+        history: state.history.clone(),
     };
-    let new_guess_three = call(game_id.to_string(), new_state_three.clone()).await;
+
+    let new_guess_three = call(new_state_three.clone()).await;
     if found_answer(&new_guess_three) {
-        let new_state_res = new_state_res(
-            new_state_three,
-            new_guess_three.guesses,
-            new_guess_three.game_id.clone(),
-        );
+        let new_state_res = new_state_res(new_state_three, operation);
         println!("!!! INCSOLUTION = {new_guess_three:?} {new_state_res:?}!!!");
         return (new_guess_three, new_state_res.clone());
+    } else {
+        let w = new_guess_three.wrong_position.clone();
+        let r = new_guess_three.right_position.clone();
+        let mut history_three = new_state_three.history.clone();
+        let guess_string = format!("{pos_one}{pos_two}{inc_max}({w},{r})[inc]");
+        history_three.insert(key, guess_string);
+        new_state_three.history = history_three;
     }
 
     let tuples = vec![
@@ -219,7 +260,8 @@ async fn inc(guess: Guess, state: State) -> (Guess, State) {
         } else {
         }
     }
-    println!("INC MAX AFTER: {guess:?} {state:?}");
+    let (max_guess, max_state) = max.clone();
+    println!("INC MAX AFTER: {max_guess:?} {max_state:?}");
 
     max
 }
@@ -232,69 +274,87 @@ async fn swap(guess: Guess, state: State) -> (Guess, State) {
         code,
         ans,
         guesses,
-        game_id: _,
-    } = state;
+        game_id,
+        history,
+    } = state.clone();
+    let operation = "~".to_string();
     println!("SWAP {state:?}");
-    let game_id = guess.game_id.clone();
 
-    let new_state_one = State {
+    let key = history.len() as i32;
+
+    let mut new_state_one = State {
         pos_one: pos_two,
         pos_two: pos_one,
         pos_three: pos_three,
         code,
         ans,
         guesses,
-        game_id: game_id.to_string(),
+        game_id: game_id.clone(),
+        history,
     };
-    let new_guess_one = call(game_id.to_string(), new_state_one.clone()).await;
+
+    let new_guess_one = call(new_state_one.clone()).await;
     if found_answer(&new_guess_one) {
-        let new_state_res = new_state_res(
-            new_state_one,
-            new_guess_one.guesses,
-            new_guess_one.game_id.clone(),
-        );
+        let new_state_res = new_state_res(new_state_one, operation);
         println!("!!! SWAPSOLUTION = {new_guess_one:?} {new_state_res:?}!!!");
         return (new_guess_one, new_state_res.clone());
+    } else {
+        let w = new_guess_one.wrong_position.clone();
+        let r = new_guess_one.right_position.clone();
+        let mut history_one = new_state_one.history.clone();
+        let history_string = format!("{pos_two}{pos_one}{pos_three}({w},{r})[swp]");
+        history_one.insert(key, history_string);
+        new_state_one.history = history_one;
     }
 
-    let new_state_two = State {
+    let mut new_state_two = State {
         pos_one: pos_two,
         pos_two: pos_three,
         pos_three: pos_one,
         code,
         ans,
         guesses,
-        game_id: game_id.to_string(),
+        game_id: game_id.clone(),
+        history: state.history.clone(),
     };
-    let new_guess_two = call(game_id.to_string(), new_state_two.clone()).await;
+
+    let new_guess_two = call(new_state_two.clone()).await;
     if found_answer(&new_guess_two) {
-        let new_state_res = new_state_res(
-            new_state_two,
-            new_guess_two.guesses,
-            new_guess_two.game_id.clone(),
-        );
+        let new_state_res = new_state_res(new_state_two, operation);
         println!("!!! SWAPSOLUTION = {new_guess_two:?} {new_state_res:?}!!!");
         return (new_guess_two, new_state_res.clone());
+    } else {
+        let w = new_guess_two.wrong_position.clone();
+        let r = new_guess_two.right_position.clone();
+        let mut history_two = new_state_two.history.clone();
+        let history_string = format!("{pos_two}{pos_three}{pos_one}({w},{r})[swp]");
+        history_two.insert(key, history_string);
+        new_state_two.history = history_two;
     }
 
-    let new_state_three = State {
+    let mut new_state_three = State {
         pos_one: pos_three,
         pos_two: pos_one,
         pos_three: pos_two,
         code,
         ans,
         guesses,
-        game_id: game_id.to_string(),
+        game_id: game_id.clone(),
+        history: state.history.clone(),
     };
-    let new_guess_three = call(game_id.to_string(), new_state_three.clone()).await;
+
+    let new_guess_three = call(new_state_three.clone()).await;
     if found_answer(&new_guess_three) {
-        let new_state_res = new_state_res(
-            new_state_three,
-            new_guess_three.guesses,
-            new_guess_three.game_id.clone(),
-        );
+        let new_state_res = new_state_res(new_state_three, operation);
         println!("!!! SWAPSOLUTION = {new_guess_three:?} {new_state_res:?}!!!");
         return (new_guess_three, new_state_res.clone());
+    } else {
+        let w = new_guess_three.wrong_position.clone();
+        let r = new_guess_three.right_position.clone();
+        let mut history_three = new_state_two.history.clone();
+        let history_string = format!("{pos_three}{pos_one}{pos_two}({w},{r})[swp]");
+        history_three.insert(key, history_string);
+        new_state_three.history = history_three;
     }
 
     let tuples = vec![
@@ -314,7 +374,8 @@ async fn swap(guess: Guess, state: State) -> (Guess, State) {
         } else {
         }
     }
-    println!("SWAP MAX AFTER: {guess:?} {state:?}");
+    let (max_guess, max_state) = max.clone();
+    println!("SWAP MAX AFTER: {max_guess:?} {max_state:?}");
 
     max
 }
@@ -329,7 +390,9 @@ async fn helper(guess: Guess, state: State) -> State {
         ans,
         guesses,
         game_id,
+        history,
     } = state.clone();
+
     if pos_one > 4 || pos_two > 4 || pos_three > 4 {
         return State {
             pos_one,
@@ -339,15 +402,8 @@ async fn helper(guess: Guess, state: State) -> State {
             ans,
             guesses,
             game_id,
+            history,
         };
-    }
-
-    if code == StateCode::STOP {
-        println!("STOP IF");
-        return state;
-    }
-    if code == StateCode::ERROR {
-        return state;
     }
 
     match guess.clone() {
@@ -365,6 +421,7 @@ async fn helper(guess: Guess, state: State) -> State {
             ans,
             guesses,
             game_id,
+            history,
         },
         Guess {
             wrong_position: 0,
@@ -381,8 +438,9 @@ async fn helper(guess: Guess, state: State) -> State {
                 ans,
                 guesses,
                 game_id: game_id.clone(),
+                history,
             };
-            let new_guess = call(game_id.clone(), new_state.clone()).await;
+            let new_guess = call(new_state.clone()).await;
             helper(new_guess, new_state).await
         }
         Guess {
@@ -422,6 +480,7 @@ async fn helper(guess: Guess, state: State) -> State {
                 ans,
                 guesses,
                 game_id,
+                history,
             }
         }
 
@@ -488,6 +547,7 @@ async fn helper(guess: Guess, state: State) -> State {
             ans,
             guesses,
             game_id,
+            history,
         },
     }
 }
